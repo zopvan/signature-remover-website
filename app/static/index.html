@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Pembersih Karakter Tak Terlihat</title>
+  <meta name="description" content="Bersihkan karakter watermark tak terlihat dari teks atau file. Hasil manual, hanya lapisan Layer A.">
+  <link rel="stylesheet" href="/assets/styles.css">
+  <script src="/assets/app.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#workspace">Lewati ke alat</a>
+  <div class="page-grain" aria-hidden="true"></div>
+  <div class="page-glow" aria-hidden="true"></div>
+
+  <header class="site-header reveal" style="--d:0ms">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 32 32" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M16 3 20 11 28 12 22 17 23.5 25 16 21 8.5 25 10 17 4 12 12 11 Z"/>
+          <circle cx="16" cy="15" r="2.4" fill="currentColor" stroke="none"/>
+        </svg>
+      </span>
+      <div class="brand-text">
+        <p class="eyebrow">Layer A · Manual</p>
+        <h1>Bersihkan Jejak Tak Terlihat</h1>
+      </div>
+    </div>
+
+    <p class="lede">
+      Bersihkan karakter watermark tak terlihat dari teks atau file yang Anda miliki.
+      Hasil manual — hanya lapisan <strong>Layer A</strong>, bukan watermark statistik.
+    </p>
+
+    <div class="health" id="health" data-state="checking" aria-live="polite">
+      <span class="health-dot" aria-hidden="true"></span>
+      <span class="health-text" id="healthText">Memeriksa layanan…</span>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="panel workspace reveal" id="workspace" style="--d:60ms" aria-labelledby="workspace-title">
+      <h2 class="visually-hidden" id="workspace-title">Alat pembersih</h2>
+
+      <div class="tabs" role="tablist" aria-label="Mode masukan">
+        <button class="tab" id="tab-text" role="tab" type="button"
+                aria-selected="true" aria-controls="panel-text" tabindex="0">
+          <span class="tab-num" aria-hidden="true">01</span> Teks
+        </button>
+        <button class="tab" id="tab-file" role="tab" type="button"
+                aria-selected="false" aria-controls="panel-file" tabindex="-1">
+          <span class="tab-num" aria-hidden="true">02</span> File
+        </button>
+        <span class="tab-rail" aria-hidden="true"></span>
+      </div>
+
+      <div class="workspace-grid">
+        <div class="input-col">
+          <!-- MODE: TEKS -->
+          <div class="tabpanel" id="panel-text" role="tabpanel" aria-labelledby="tab-text" tabindex="0">
+            <div class="field-head">
+              <label class="field-label" for="inputText">Teks dari chat web</label>
+              <span class="field-count" id="charCount">0 karakter</span>
+            </div>
+            <textarea id="inputText" class="textarea" spellcheck="false"
+                      placeholder="Tempel (paste) teks di sini, lalu klik Bersihkan."
+                      aria-describedby="inputText-hint"></textarea>
+            <p class="field-hint" id="inputText-hint">
+              Karakter tak terlihat sering terbawa saat menyalin dari aplikasi chat.
+            </p>
+          </div>
+
+          <!-- MODE: FILE -->
+          <div class="tabpanel" id="panel-file" role="tabpanel" aria-labelledby="tab-file" tabindex="0" hidden>
+            <div class="field-head">
+              <span class="field-label" id="dropzone-label">Berkas</span>
+            </div>
+
+            <div class="dropzone" id="dropzone" role="button" tabindex="0"
+                 aria-labelledby="dropzone-label" aria-describedby="dropzone-hint">
+              <span class="dropzone-scan" aria-hidden="true"></span>
+              <span class="dropzone-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 16V4m0 0L7 9m5-5 5 5"/>
+                  <path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/>
+                </svg>
+              </span>
+              <span class="dropzone-title">Seret file ke sini atau tekan untuk memilih</span>
+              <span class="dropzone-hint" id="dropzone-hint">
+                Teks, gambar, dokumen, audio/video. Maks 25 MB. Tekan Enter atau Spasi untuk memilih.
+              </span>
+            </div>
+            <input type="file" id="fileInput" class="visually-hidden" aria-hidden="true" tabindex="-1">
+
+            <div class="file-chip" id="fileChip" hidden>
+              <span class="file-chip-name" id="fileName"></span>
+              <span class="file-chip-meta" id="fileMeta"></span>
+              <button class="file-chip-clear" id="fileClear" type="button" aria-label="Hapus file terpilih">Ganti</button>
+            </div>
+          </div>
+        </div>
+
+        <aside class="options-col" aria-labelledby="options-title">
+          <div class="options-head">
+            <h3 class="options-title" id="options-title">Opsi pembersihan</h3>
+            <span class="options-tag">berlaku untuk keduanya</span>
+          </div>
+
+          <fieldset class="options">
+            <legend class="visually-hidden">Opsi pembersihan</legend>
+
+            <label class="option">
+              <input type="checkbox" id="opt-normalize_spaces" checked aria-describedby="hint-normalize_spaces">
+              <span class="option-body">
+                <span class="option-title">Rapikan spasi samar</span>
+                <span class="option-hint" id="hint-normalize_spaces">Ganti spasi Unicode tak lazim dengan spasi biasa.</span>
+              </span>
+            </label>
+
+            <label class="option">
+              <input type="checkbox" id="opt-nfkc" aria-describedby="hint-nfkc">
+              <span class="option-body">
+                <span class="option-title">Normalisasi NFKC</span>
+                <span class="option-hint" id="hint-nfkc">Ubah varian bentuk Unicode ke bentuk standar (mis. ﬁ → fi).</span>
+              </span>
+            </label>
+
+            <label class="option">
+              <input type="checkbox" id="opt-strip_emoji_glue" aria-describedby="hint-strip_emoji_glue">
+              <span class="option-body">
+                <span class="option-title">Buang perekat emoji</span>
+                <span class="option-hint" id="hint-strip_emoji_glue">Hapus penanda tak terlihat yang menempel pada emoji. Bisa mengubah emoji majemuk.</span>
+              </span>
+            </label>
+
+            <label class="option">
+              <input type="checkbox" id="opt-strip_bidi" aria-describedby="hint-strip_bidi">
+              <span class="option-body">
+                <span class="option-title">Buang penanda arah teks</span>
+                <span class="option-hint" id="hint-strip_bidi">Hapus kontrol arah (bidi) yang tak terlihat.</span>
+              </span>
+            </label>
+
+            <label class="option">
+              <input type="checkbox" id="opt-aggressive_homoglyphs" aria-describedby="hint-aggressive_homoglyphs">
+              <span class="option-body">
+                <span class="option-title">Homoglyph agresif</span>
+                <span class="option-hint" id="hint-aggressive_homoglyphs">Ganti huruf mirip dari aksara lain menjadi huruf Latin. Lebih agresif.</span>
+              </span>
+            </label>
+          </fieldset>
+        </aside>
+      </div>
+
+      <div class="action-row">
+        <button class="btn btn-primary" id="cleanBtn" type="button">
+          <span class="btn-spinner" aria-hidden="true"></span>
+          <span class="btn-label">Bersihkan</span>
+        </button>
+        <button class="btn btn-ghost" id="inspectBtn" type="button">Periksa penanda</button>
+        <button class="btn btn-ghost" id="resetBtn" type="button">Reset</button>
+        <p class="action-note">
+          Hanya menghapus penanda tak terlihat/Unicode. Watermark statistik (Layer B) tidak termasuk.
+        </p>
+      </div>
+    </section>
+
+    <section class="panel result-area reveal" style="--d:140ms" aria-labelledby="result-title">
+      <h2 class="visually-hidden" id="result-title">Hasil</h2>
+
+      <div class="status" id="statusRegion" role="status" aria-live="polite"></div>
+
+      <div class="error" id="errorRegion" role="alert" hidden>
+        <span class="error-icon" aria-hidden="true">!</span>
+        <div class="error-body">
+          <p class="error-title" id="errorTitle">Terjadi kesalahan</p>
+          <p class="error-detail" id="errorDetail"></p>
+          <details class="error-report" id="errorReport" hidden>
+            <summary>Tinjauan sebelum pembersihan</summary>
+            <pre class="json" id="errorReportBody"></pre>
+          </details>
+        </div>
+      </div>
+
+      <div class="empty" id="emptyState">
+        <p>Belum ada hasil. Pilih mode di atas, masukkan teks atau file, lalu klik <strong>Bersihkan</strong>.</p>
+      </div>
+
+      <!-- INSPECT (read-only preview of /api/inspect) -->
+      <div class="result" id="inspectResult" hidden>
+        <div class="result-head">
+          <div class="result-title-group">
+            <span class="result-kind">Periksa</span>
+            <h3 id="inspectHeadline">Pratinjau penanda</h3>
+          </div>
+          <span class="badge" id="inspectBadge" hidden></span>
+        </div>
+        <p class="result-summary" id="inspectSummary"></p>
+        <div class="marks" id="inspectMarks"></div>
+        <details class="report">
+          <summary>Laporan lengkap</summary>
+          <div class="report-body">
+            <div class="report-section">
+              <h4>Hasil pemeriksaan (inspect)</h4>
+              <pre class="json" id="inspectReport"></pre>
+            </div>
+          </div>
+        </details>
+      </div>
+
+      <!-- RESULT: TEKS -->
+      <div class="result" id="resultText" hidden>
+        <div class="result-head">
+          <div class="result-title-group">
+            <span class="result-kind">Teks</span>
+            <h3>Hasil pembersihan</h3>
+          </div>
+          <div class="result-actions">
+            <button class="btn btn-soft btn-sm" id="copyBtn" type="button">Salin</button>
+            <button class="btn btn-soft btn-sm" id="downloadTxtBtn" type="button">Unduh .txt</button>
+          </div>
+        </div>
+
+        <p class="result-summary" id="textSummary"></p>
+
+        <div class="stats" id="textStats"></div>
+
+        <div class="output-block">
+          <div class="output-head">
+            <span class="output-label" id="cleanedTextLabel">Teks bersih</span>
+            <span class="output-meta" id="textOutputMeta"></span>
+          </div>
+          <pre class="cleaned" id="cleanedText" tabindex="0" aria-labelledby="cleanedTextLabel"></pre>
+        </div>
+
+        <div class="marks" id="textMarks"></div>
+
+        <details class="report">
+          <summary>Laporan lengkap</summary>
+          <div class="report-body">
+            <div class="report-section">
+              <h4>Sebelum (inspect)</h4>
+              <pre class="json" id="textReportBefore"></pre>
+            </div>
+            <div class="report-section">
+              <h4>Sesudah (clean)</h4>
+              <pre class="json" id="textReportAfter"></pre>
+            </div>
+          </div>
+        </details>
+      </div>
+
+      <!-- RESULT: FILE -->
+      <div class="result" id="resultFile" hidden>
+        <div class="result-head">
+          <div class="result-title-group">
+            <span class="result-kind" id="fileKindChip">File</span>
+            <h3 id="fileHeadline">Hasil pembersihan</h3>
+          </div>
+          <span class="badge" id="fileChangedBadge" hidden></span>
+        </div>
+
+        <p class="result-summary" id="fileSummary"></p>
+
+        <dl class="file-meta">
+          <div class="file-meta-item">
+            <dt>Jenis terdeteksi</dt>
+            <dd id="fileKind">—</dd>
+          </div>
+          <div class="file-meta-item">
+            <dt>Nama hasil</dt>
+            <dd id="fileDownloadName">—</dd>
+          </div>
+          <div class="file-meta-item">
+            <dt>Ukuran hasil</dt>
+            <dd id="fileSize">—</dd>
+          </div>
+        </dl>
+
+        <div class="marks" id="fileFindings"></div>
+
+        <div class="result-actions result-actions-left">
+          <button class="btn btn-primary btn-sm" id="downloadFileBtn" type="button">Unduh hasil</button>
+        </div>
+
+        <details class="report">
+          <summary>Laporan lengkap</summary>
+          <div class="report-body">
+            <div class="report-section">
+              <h4>Sebelum (inspect)</h4>
+              <pre class="json" id="fileReportBefore"></pre>
+            </div>
+            <div class="report-section">
+              <h4>Sesudah (clean)</h4>
+              <pre class="json" id="fileReportAfter"></pre>
+            </div>
+          </div>
+        </details>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer reveal" style="--d:200ms">
+    <p>Berjalan lokal di perangkat Anda · hanya lapisan Layer A · versi antarmuka 1.0</p>
+  </footer>
+</body>
+</html>
