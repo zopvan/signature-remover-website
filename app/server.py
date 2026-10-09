@@ -57,6 +57,7 @@ DEFAULT_OPTIONS = {
     "strip_emoji_glue": False,
     "strip_bidi": False,
     "aggressive_homoglyphs": False,
+    "strip_ai_tells": True,
 }
 
 # Report keys that can carry absolute host paths; never leak these.
@@ -274,6 +275,11 @@ def inspect_summary(kind: str, report: dict) -> str:
             count = int(report.get("suspicious_total", 0))
         except (TypeError, ValueError):
             count = 0
+        ai = report.get("ai_tells") if isinstance(report.get("ai_tells"), dict) else {}
+        try:
+            count += int(ai.get("total", 0))
+        except (TypeError, ValueError):
+            pass
     else:
         findings = report.get("findings")
         count = len(findings) if isinstance(findings, list) else 0
@@ -292,9 +298,21 @@ def text_clean_summary(report: dict) -> str:
         replaced = int(stats.get("replaced_count", 0))
     except (TypeError, ValueError):
         replaced = 0
-    if removed == 0 and replaced == 0:
+    ai = report.get("ai_tells") if isinstance(report.get("ai_tells"), dict) else {}
+    try:
+        ai_total = int(ai.get("total", 0))
+    except (TypeError, ValueError):
+        ai_total = 0
+    parts: list[str] = []
+    if removed > 0:
+        parts.append(f"{removed} karakter tak terlihat dihapus")
+    if replaced > 0:
+        parts.append(f"{replaced} spasi diganti")
+    if ai_total > 0:
+        parts.append(f"{ai_total} tanda AI dibuang")
+    if not parts:
         return "Tidak ada tanda yang ditemukan"
-    return f"{removed} karakter dihapus, {replaced} spasi diganti"
+    return ", ".join(parts)
 
 
 def guess_mime(download_name: str, fallback: str = "application/octet-stream") -> str:
@@ -302,6 +320,189 @@ def guess_mime(download_name: str, fallback: str = "application/octet-stream") -
 
     ctype, _ = mimetypes.guess_type(download_name)
     return ctype or fallback
+
+
+# ---------------------------------------------------------------------------
+# App-side AI-tell cleanup (post-processing pass)
+#
+# The upstream Layer A CLI removes invisible Unicode, exotic spaces, bidi and
+# tag characters, but leaves visible typographic "AI tells": em/en dashes,
+# curly quotes and emoji. This pass strips those from the cleaned text. It is a
+# pure function - no side effects beyond returning the new string + counts.
+# ---------------------------------------------------------------------------
+
+# Dashes to remove entirely (no replacement).
+_AI_DASH_CODEPOINTS = frozenset(
+    (
+        0x2010,  # hyphen
+        0x2011,  # non-breaking hyphen
+        0x2012,  # figure dash
+        0x2013,  # en dash
+        0x2014,  # em dash
+        0x2015,  # horizontal bar
+        0x2043,  # hyphen bullet
+        0x2212,  # minus sign
+        0x2E3A,  # two-em dash
+        0x2E3B,  # three-em dash
+        0xFE58,  # small em dash
+        0xFE63,  # small hyphen-minus
+        0xFF0D,  # fullwidth hyphen-minus
+    )
+)
+
+# Curly quotes -> straight ASCII.
+_AI_QUOTE_MAP = {
+    0x2018: "'",  # left single quotation mark
+    0x2019: "'",  # right single quotation mark
+    0x201A: "'",  # single low-9 quotation mark
+    0x201B: "'",  # single high-reversed-9 quotation mark
+    0x201C: '"',  # left double quotation mark
+    0x201D: '"',  # right double quotation mark
+    0x201E: '"',  # double low-9 quotation mark
+    0x201F: '"',  # double high-reversed-9 quotation mark
+    0x2032: "'",  # prime
+    0x2033: '"',  # double prime
+}
+
+# Emoji codepoint ranges (stdlib has no emoji property).
+_AI_EMOJI_RANGES = (
+    (0x1F1E6, 0x1F1FF),  # regional indicators
+    (0x1F300, 0x1F5FF),  # misc symbols and pictographs
+    (0x1F600, 0x1F64F),  # emoticons
+    (0x1F680, 0x1F6FF),  # transport and map
+    (0x1F700, 0x1F77F),  # alchemical
+    (0x1F780, 0x1F7FF),  # geometric shapes extended
+    (0x1F800, 0x1F8FF),  # supplemental arrows-C
+    (0x1F900, 0x1F9FF),  # supplemental symbols and pictographs
+    (0x1FA00, 0x1FAFF),  # symbols and pictographs extended-A
+    (0x1FB00, 0x1FBFF),  # symbols for legacy computing
+    (0x2600, 0x26FF),  # misc symbols
+    (0x2700, 0x27BF),  # dingbats
+    (0x2B00, 0x2BFF),  # misc symbols and arrows
+    (0x1F3FB, 0x1F3FF),  # skin tone modifiers
+)
+
+# Individual emoji / glue codepoints.
+_AI_EMOJI_SINGLES = frozenset(
+    (
+        0x200D,  # zero width joiner
+        0x20E3,  # combining enclosing keycap
+        0xFE0E,  # variation selector-15 (text)
+        0xFE0F,  # variation selector-16 (emoji)
+        0x2049,  # exclamation question mark
+        0x203C,  # double exclamation mark
+        0x2122,  # trade mark sign
+        0x2139,  # information source
+        0x24C2,  # circled latin capital letter M
+        0x25AA,  # black small square
+        0x25AB,  # white small square
+        0x25B6,  # black right-pointing triangle
+        0x25C0,  # black left-pointing triangle
+        0x25FB,  # white medium square
+        0x25FC,  # black medium square
+        0x25FD,  # white medium small square
+        0x25FE,  # black medium small square
+        0x2934,  # arrow pointing rightwards then curving upwards
+        0x2935,  # arrow pointing rightwards then curving downwards
+        0x2B05,  # leftwards black arrow
+        0x2B06,  # upwards black arrow
+        0x2B07,  # downwards black arrow
+        0x2B1B,  # black large square
+        0x2B1C,  # white large square
+        0x2B50,  # white medium star
+        0x2B55,  # heavy large circle
+        0x3030,  # wavy dash
+        0x303D,  # part alternation mark
+        0x3297,  # circled ideograph congratulation
+        0x3299,  # circled ideograph secret
+    )
+)
+
+# Conservative ASCII emoticons. Boundaries keep normal words untouched.
+_AI_EMOTICON_RE = re.compile(
+    r"(?<!\w)(?:"
+    r":'-\("
+    r"|:'\("
+    r"|:-\)"
+    r"|:-D"
+    r"|:-P"
+    r"|:-p"
+    r"|:-/"
+    r"|:-\|"
+    r"|:-\("
+    r"|;-\)"
+    r"|:\)"
+    r"|:\("
+    r"|;\)"
+    r"|:D"
+    r"|:P"
+    r"|:p"
+    r"|:/"
+    r"|:\|"
+    r"|=\)"
+    r"|=\("
+    r"|<3"
+    r"|\^_\^"
+    r"|xD"
+    r")(?!\w)"
+)
+
+
+def _is_ai_emoji(cp: int) -> bool:
+    if cp in _AI_EMOJI_SINGLES:
+        return True
+    for low, high in _AI_EMOJI_RANGES:
+        if low <= cp <= high:
+            return True
+    return False
+
+
+def strip_ai_tells(text: str) -> tuple[str, dict]:
+    """Remove visible typographic AI tells from ``text``.
+
+    Returns ``(cleaned_text, counts)`` where ``counts`` has keys
+    ``dashes``, ``quotes``, ``emoji``, ``emoticons`` and ``total``.
+    Pure function - no side effects.
+    """
+    counts = {"dashes": 0, "quotes": 0, "emoji": 0, "emoticons": 0, "total": 0}
+    if not text:
+        return text, counts
+
+    out: list[str] = []
+    for i, ch in enumerate(text):
+        cp = ord(ch)
+        if cp in _AI_DASH_CODEPOINTS or _is_ai_emoji(cp):
+            if cp in _AI_DASH_CODEPOINTS:
+                counts["dashes"] += 1
+            else:
+                counts["emoji"] += 1
+            # Tidy spacing around the removed char so tokens neither merge nor
+            # leave a double space: "a — b" -> "a b", "a—b" -> "a b".
+            nxt = text[i + 1] if i + 1 < len(text) else ""
+            prev_space = bool(out) and out[-1] in (" ", "\t")
+            next_space = nxt in (" ", "\t")
+            if prev_space and next_space:
+                out.pop()  # both sides spaced: keep the following space only
+            elif out and nxt and not prev_space and not next_space:
+                out.append(" ")  # no space either side: keep one between tokens
+            continue
+        if cp in _AI_QUOTE_MAP:
+            counts["quotes"] += 1
+            out.append(_AI_QUOTE_MAP[cp])
+            continue
+        out.append(ch)
+
+    cleaned = "".join(out)
+    cleaned, emoticons = _AI_EMOTICON_RE.subn("", cleaned)
+    counts["emoticons"] = emoticons
+    counts["total"] = (
+        counts["dashes"] + counts["quotes"] + counts["emoji"] + counts["emoticons"]
+    )
+    # Emoticon runs can leave doubled spaces behind; collapse them only when we
+    # actually removed something, so clean text is never rewritten otherwise.
+    if counts["emoticons"] > 0:
+        cleaned = re.sub(r" {2,}", " ", cleaned)
+    return cleaned, counts
 
 
 # ---------------------------------------------------------------------------
@@ -443,7 +644,7 @@ class Handler(BaseHTTPRequestHandler):
     # -- endpoint logic ------------------------------------------------------
 
     def _handle_inspect(self, body: dict) -> None:
-        mode, name, data, is_text, _text, options = parse_input(body)
+        mode, name, data, is_text, text, options = parse_input(body)
         tmp_dir = tempfile.mkdtemp(prefix="wmr-")
         try:
             in_path = Path(tmp_dir) / name
@@ -458,13 +659,28 @@ class Handler(BaseHTTPRequestHandler):
                 raise ApiError(500, "Gagal memeriksa berkas")
             report = sanitize_report(parse_json_stdout(proc.stdout)) or {}
             kind = report.get("kind") or "unknown"
+
+            # App-side AI-tell detection on the original text.
+            ai_counts: dict | None = None
+            if kind == "text":
+                if mode == "text" and isinstance(text, str):
+                    original = text
+                else:
+                    original = data.decode("utf-8", "replace")
+                _, ai_counts = strip_ai_tells(original)
+                report["ai_tells"] = ai_counts
+
+            suspicious = derive_suspicious(kind, report)
+            if ai_counts and ai_counts.get("total", 0) > 0:
+                suspicious = True
+
             self._send_json(
                 200,
                 {
                     "ok": True,
                     "kind": kind,
                     "name": name,
-                    "suspicious": derive_suspicious(kind, report),
+                    "suspicious": suspicious,
                     "summary": inspect_summary(kind, report),
                     "report": report,
                 },
@@ -527,6 +743,12 @@ class Handler(BaseHTTPRequestHandler):
 
             if mode == "text":
                 cleaned = out_bytes.decode("utf-8", "replace")
+                if options["strip_ai_tells"]:
+                    cleaned, ai_counts = strip_ai_tells(cleaned)
+                    if ai_counts["total"] > 0:
+                        report["ai_tells"] = ai_counts
+                        changed = True
+                out_bytes = cleaned.encode("utf-8")
                 summary = text_clean_summary(report)
                 resp = {
                     "ok": True,
@@ -543,7 +765,17 @@ class Handler(BaseHTTPRequestHandler):
                     "report": report,
                 }
             else:
-                summary = "Metadata dibersihkan" if changed else "Tidak ada yang perlu diubah"
+                if kind == "text" and options["strip_ai_tells"]:
+                    text = out_bytes.decode("utf-8", "replace")
+                    text, ai_counts = strip_ai_tells(text)
+                    if ai_counts["total"] > 0:
+                        report["ai_tells"] = ai_counts
+                        changed = True
+                        out_bytes = text.encode("utf-8")
+                if kind == "text":
+                    summary = text_clean_summary(report)
+                else:
+                    summary = "Metadata dibersihkan" if changed else "Tidak ada yang perlu diubah"
                 resp = {
                     "ok": True,
                     "kind": kind,

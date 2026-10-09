@@ -62,6 +62,32 @@ CODE=$(curl -s -o /tmp/opencode/wm-unknown.json -w '%{http_code}' -X POST "$BASE
 [ "$CODE" = "422" ]; check "unknown -> HTTP 422" $?
 grep -q '"ok": *false' /tmp/opencode/wm-unknown.json; check "unknown -> ok:false" $?
 
+echo "== clean text strips AI tells =="
+AI_BODY='{"text":"The Mysterious Letter \u2014 Surat Misterius. \u201cHalo\u201d \ud83d\ude0a"}'
+R=$(curl -s -X POST "$BASE/api/clean" -H 'Content-Type: application/json' --data-binary "$AI_BODY")
+echo "$R" | grep -q '"ok": *true'; check "clean AI ok" $?
+if echo "$R" | python3 -c 'import sys,json; d=json.load(sys.stdin); c=d.get("cleaned",""); assert "\u2014" not in c and "\u201c" not in c and "\u201d" not in c and "\"Halo\"" in c and "\U0001F60A" not in c'; then ok "cleaned strips dash/curly quotes/emoji"; else bad "cleaned strips dash/curly quotes/emoji"; fi
+
+echo "== strip_ai_tells=false keeps the dash =="
+R=$(curl -s -X POST "$BASE/api/clean" -H 'Content-Type: application/json' \
+  --data-binary '{"text":"The Mysterious Letter \u2014 Surat Misterius. \u201cHalo\u201d \ud83d\ude0a","options":{"strip_ai_tells":false}}')
+echo "$R" | grep -q '"ok": *true'; check "clean AI opt-out ok" $?
+if echo "$R" | python3 -c 'import sys,json; d=json.load(sys.stdin); assert "\u2014" in d.get("cleaned","")'; then ok "opt-out keeps em dash"; else bad "opt-out keeps em dash"; fi
+
+echo "== keyboard hyphen must survive =="
+R=$(curl -s -X POST "$BASE/api/clean" -H 'Content-Type: application/json' \
+  --data-binary '{"text":"e-mail a-b 10-20"}')
+if echo "$R" | python3 -c 'import sys,json; d=json.load(sys.stdin); c=d.get("cleaned",""); assert "e-mail a-b 10-20" == c, c'; then ok "ascii hyphen preserved"; else bad "ascii hyphen preserved"; fi
+
+echo "== dash between words keeps one space =="
+R=$(curl -s -X POST "$BASE/api/clean" -H 'Content-Type: application/json' \
+  --data-binary '{"text":"well\u2014known"}')
+if echo "$R" | python3 -c 'import sys,json; d=json.load(sys.stdin); assert d.get("cleaned")=="well known", d.get("cleaned")'; then ok "no-space dash -> single space"; else bad "no-space dash -> single space"; fi
+
+echo "== inspect reports AI tells =="
+R=$(curl -s -X POST "$BASE/api/inspect" -H 'Content-Type: application/json' --data-binary "$AI_BODY")
+echo "$R" | grep -q '"suspicious": *true'; check "inspect AI tells -> suspicious" $?
+
 echo "== js syntax =="
 if command -v node >/dev/null; then node --check "$APP/static/app.js"; check "node --check app.js" $?; fi
 

@@ -8,7 +8,8 @@
 (function () {
   // ---- constants -------------------------------------------------
   var OPTION_IDS = [
-    'nfkc', 'normalize_spaces', 'strip_emoji_glue', 'strip_bidi', 'aggressive_homoglyphs'
+    'strip_ai_tells', 'nfkc', 'normalize_spaces', 'strip_emoji_glue',
+    'strip_bidi', 'aggressive_homoglyphs'
   ];
   var MAX_BYTES = 25 * 1024 * 1024; // 25 MiB raw, per contract
 

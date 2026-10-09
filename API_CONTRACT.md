@@ -59,7 +59,8 @@ Repo relative to `WATERMARKS_REPO`.
   "normalize_spaces": true,
   "strip_emoji_glue": false,
   "strip_bidi": false,
-  "aggressive_homoglyphs": false
+  "aggressive_homoglyphs": false,
+  "strip_ai_tells": true
 }
 ```
 
@@ -72,6 +73,9 @@ Option -> CLI flag mapping:
 | strip_emoji_glue | (none) | `--strip-emoji-glue` |
 | strip_bidi | (none) | `--strip-bidi` |
 | aggressive_homoglyphs | `--aggressive` | `--aggressive-homoglyphs` |
+
+`strip_ai_tells` has **no upstream CLI flag**: it is an app-side post-processing
+pass in `server.py` (see below).
 
 - Limits: raw input max **25 MiB** (for base64, decode first then check). Subprocess
   timeout 60s. Temp work dir via `tempfile.mkdtemp()`, always cleaned up.
@@ -102,10 +106,39 @@ when `aggressive_homoglyphs`).
 }
 ```
 - `kind`: `text` | `image` | `container` | `av` | `unknown`.
-- `suspicious`: bool (default false). For text derive from `suspicious_total > 0`
-  of the raw report.
-- `summary`: short human string (Indonesian) safe to display.
+- `suspicious`: bool (default false). For text true when upstream
+  `suspicious_total > 0` **or** the app-side `ai_tells.total > 0` (see below).
+- `summary`: short human string (Indonesian) safe to display; for text it counts
+  Layer A hits plus app-side AI tells.
 - `report`: the raw `inspect_file.py --json` object, passed through (may be `{}`).
+  For text inputs, `report["ai_tells"]` is always attached with the app-side
+  detection counts (may be all zeros).
+
+## App-side AI-tell pass (`strip_ai_tells`)
+
+After the upstream Layer A clean, `server.py` optionally strips **visible**
+typographic "AI tells" that Layer A ignores. Runs only for text inputs and for
+files classified as `text`; image/container/av bytes are never rewritten.
+
+- **Dashes -> removed** (no replacement): U+2010, U+2011, U+2012, U+2013 (en),
+  U+2014 (em), U+2015, U+2043, U+2212, U+2E3A, U+2E3B, U+FE58, U+FE63, U+FF0D.
+  Spacing is tidied so tokens do not merge or leave a double space:
+  `"a — b"` -> `"a b"`, `"a—b"` -> `"a b"`. The keyboard hyphen-minus (U+002D)
+  is **never** touched.
+- **Curly quotes -> straight ASCII**: U+2018/U+2019/U+201A/U+201B -> `'`;
+  U+201C/U+201D/U+201E/U+201F -> `"`; U+2032 -> `'`; U+2033 -> `"`.
+- **Emoji -> removed**: emoji pictograph ranges (U+1F1E6-U+1F1FF, U+1F300-U+1FAFF,
+  U+2600-U+26FF, U+2700-U+27BF, U+2B00-U+2BFF, skin tones) plus glue/selector
+  singles (ZWJ U+200D, keycap U+20E3, VS15/VS16 U+FE0E/U+FE0F) and common
+  standalone symbols.
+- **ASCII emoticons -> removed** via a conservative, boundary-anchored regex
+  (`:)`, `:-)`, `:(`, `:D`, `;)`, `<3`, `xD`, `^_^`, ...). Doubled spaces left by
+  emoticon runs are collapsed.
+
+Counts are returned as `report["ai_tells"]`:
+`{"dashes":int,"quotes":int,"emoji":int,"emoticons":int,"total":int}` — attached
+on `/api/clean` when `total > 0` (and `changed` becomes true), and always
+attached on `/api/inspect` for text.
 
 ### `POST /api/clean`
 Body = text input or file input. Steps:
@@ -125,7 +158,7 @@ Response for **text input**:
   "cleaned": "HelloWorld",
   "cleaned_base64": null,
   "content_length": 10,
-  "summary": "2 karakter dihapus, 1 spasi diganti",
+  "summary": "2 karakter tak terlihat dihapus, 1 spasi diganti",
   "report_before": { },
   "report": { }
 }
@@ -147,11 +180,14 @@ Response for **file input**:
   "report": { }
 }
 ```
-- `changed`: from the raw clean report `changed` (default true if unknown).
+- `changed`: from the raw clean report `changed` (default true if unknown); also
+  true whenever the app-side AI-tell pass removed something.
 - `summary`: Indonesian, derived from report if possible:
-  - text: `"{removed_count} karakter dihapus, {replaced_count} spasi diganti"`;
-    if both 0 -> `"Tidak ada tanda yang ditemukan"`.
-  - file: `"Metadata dibersihkan"` when `changed` else `"Tidak ada yang perlu diubah"`.
+  - text: joins the non-zero parts of `"{removed} karakter tak terlihat dihapus"`,
+    `"{replaced} spasi diganti"`, `"{ai_total} tanda AI dibuang"`; if all zero ->
+    `"Tidak ada tanda yang ditemukan"`.
+  - file: `"Metadata dibersihkan"` when `changed` else `"Tidak ada yang perlu diubah"`;
+    for files classified as `text`, the text summary above is used instead.
 - `mime`: guess from `download_name` (`mimetypes.guess_type`), fallback
   `application/octet-stream`.
 

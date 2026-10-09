@@ -5,8 +5,9 @@ Antarmuka web lokal untuk membersihkan **karakter watermark AI yang tak terlihat
 yang Anda miliki. Ini alur **manual**: tempel teks / unggah file, lalu dapatkan
 hasil bersihnya.
 
-> Ini hanya Layer A (deterministik). Watermark statistik (token-sampling, Layer B)
-> tidak dihapus di sini.
+> Ini hanya Layer A (deterministik) plus **pembersihan tanda khas AI** di sisi
+> aplikasi (tanda pisah panjang, kutip keriting, emoji/emoticon). Watermark
+> statistik (token-sampling, Layer B) tidak dihapus di sini.
 
 ## Prasyarat
 
@@ -51,6 +52,7 @@ Lalu buka **http://127.0.0.1:8770** di browser.
 
 | Opsi | Default | Arti |
 |---|---|---|
+| Buang tanda khas AI | aktif | Hapus tanda pisah panjang (—, –), ubah kutip keriting ("" '') jadi lurus, buang emoji & emoticon. Strip keyboard `-` tidak disentuh. |
 | NFKC | nonaktif | Normalisasi Unicode NFKC setelah pembersihan. |
 | Normalisasi spasi | aktif | Ubah spasi eksotis (mis. non-breaking space) ke spasi biasa. Matikan untuk bahasa seperti Prancis yang butuh spasi khusus. |
 | Setel juga perekat emoji | nonaktif | Agresif: juga buang invisible "load-bearing" (perekat emoji, joiner, tag). |
